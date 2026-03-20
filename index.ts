@@ -5,13 +5,6 @@ type Body = {
     message: string;
 }
 
-type TrieNode = {
-  next: Map<string, TrieNode>;
-  terminal: string | null;
-};
-
-const root: TrieNode = { next: new Map(), terminal: null };
-
 const terms = Array.from(
   new Set(
     listText
@@ -21,31 +14,78 @@ const terms = Array.from(
   )
 );
 
-for (const term of terms) {
-  let node = root;
-  for (const ch of term) {
-    let child = node.next.get(ch);
-    if (!child) {
-      child = { next: new Map(), terminal: null };
-      node.next.set(ch, child);
-    }
-    node = child;
+const hostPattern = /\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\b/gi;
+
+function normalizeHost(value: string): string | null {
+  const trimmed = value.trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+  if (trimmed.length === 0 || trimmed.length > 253) {
+    return null;
   }
-  node.terminal = term;
+  const labels = trimmed.split(".");
+  if (labels.length < 2) {
+    return null;
+  }
+  for (const label of labels) {
+    if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) {
+      return null;
+    }
+  }
+  return labels.join(".");
 }
 
-function findContainedTerm(message: string): string | null {
-  const haystack = message.toLowerCase();
-  for (let i = 0; i < haystack.length; i++) {
-    let node = root.next.get(haystack.charAt(i));
-    if (!node) continue;
-    if (node.terminal) return node.terminal;
-    for (let j = i + 1; j < haystack.length; j++) {
-      node = node.next.get(haystack.charAt(j)) as TrieNode;
-      if (!node) break;
-      if (node.terminal) return node.terminal;
+const blockedHosts = new Set(
+  terms
+    .map((term) => normalizeHost(term))
+    .filter((term): term is string => term !== null)
+);
+
+function findBlockedHostInMessage(message: string): string | null {
+  const candidates = new Set<string>();
+
+  try {
+    const parsed = new URL(message);
+    if (parsed.hostname) {
+      candidates.add(parsed.hostname);
+    }
+  } catch {
+  }
+
+  for (const match of message.toLowerCase().matchAll(hostPattern)) {
+    candidates.add(match[0]);
+  }
+
+  for (const candidate of candidates) {
+    const host = normalizeHost(candidate);
+    if (!host) {
+      continue;
+    }
+    let current = host;
+    while (true) {
+      if (blockedHosts.has(current)) {
+        return current;
+      }
+      const lastDot = current.lastIndexOf(".");
+      if (lastDot === -1) {
+        break;
+      }
+      current = current.slice(0, lastDot);
+    }
+
+    if (host.startsWith("www.")) {
+      current = host.slice(4);
+      while (true) {
+        if (blockedHosts.has(current)) {
+          return current;
+        }
+        const lastDot = current.lastIndexOf(".");
+        if (lastDot === -1) {
+          break;
+        }
+        current = current.slice(0, lastDot);
+      }
     }
   }
+
   return null;
 }
 
@@ -69,8 +109,18 @@ export default {
       }
 
       const normalizedMessage = body.message.trim();
+      const lowerMessage = normalizedMessage.toLowerCase();
 
       if (normalizedMessage.length === 0 || normalizedMessage === "{check.response.result}") {
+        return Response.json({ result: "GOOD" });
+      }
+
+      const matched = findBlockedHostInMessage(normalizedMessage);
+      if (matched) {
+        return Response.json({ result: "BAD" });
+      }
+
+      if (/\.gif(?:[?#].*)?$/i.test(lowerMessage)) {
         return Response.json({ result: "GOOD" });
       }
 
@@ -82,9 +132,7 @@ export default {
       } catch {
       }
 
-      const matched = findContainedTerm(normalizedMessage);
-
-      return Response.json({ result: matched ? "BAD" : "GOOD" });
+      return Response.json({ result: "GOOD" });
     }
 
     if (request.method === "GET" && url.pathname === "/") {
