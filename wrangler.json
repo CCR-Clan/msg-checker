@@ -2,5 +2,27 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "msg-checker",
   "main": "index.ts",
-  "compatibility_date": "2026-03-20"
+  "compatibility_date": "2026-03-20",
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/*.txt"],
+      "fallthrough": false
+    }
+  ],
+  "observability": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "persist": true,
+        "invocation_logs": true
+      },
+      "traces": {
+        "enabled": false,
+        "persist": true,
+        "head_sampling_rate": 1
+      }
+  }
 }
