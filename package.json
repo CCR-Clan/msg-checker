@@ -1,0 +1,23 @@
+{
+  "name": "msg-checker",
+  "version": "1.0.0",
+  "description": "check da message",
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4.57.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
